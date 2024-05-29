@@ -1,43 +1,44 @@
 import cv2
+import os
 
-# Open the video file or capture device
-video_path = 'path_to_your_video.mp4'  # Change this to your video file path
-cap = cv2.VideoCapture(video_path)
+# Create a directory to save images if it doesn't exist
+output_dir = 'captured_images'
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
-# Check if the video capture is opened successfully
+# Initialize the video capture object
+cap = cv2.VideoCapture(0)  # 0 is typically the default camera
+
 if not cap.isOpened():
-    print("Error: Could not open video.")
+    print("Error: Could not open video capture.")
     exit()
 
-# Frame counter
+# Set frame counter
 frame_count = 0
 
 while True:
     # Capture frame-by-frame
     ret, frame = cap.read()
 
-    # If the frame was not grabbed, we've reached the end of the video
     if not ret:
+        print("Error: Could not read frame.")
         break
 
-    # Display the resulting frame
-    cv2.imshow('Video Frame', frame)
+    # Display the frame in a window
+    cv2.imshow('Live Video', frame)
 
     # Check for key press
     key = cv2.waitKey(1) & 0xFF
-    if key == ord('s'):
-        # Save the current frame as an image
-        image_path = f'saved_image_{frame_count}.jpg'
-        cv2.imwrite(image_path, frame)
-        print(f"Frame {frame_count} saved as {image_path}")
+    if key == ord('s'):  # Save the frame if 's' key is pressed
+        img_name = os.path.join(output_dir, f'frame_{frame_count}.png')
+        cv2.imwrite(img_name, frame)
+        print(f"Saved {img_name}")
+        frame_count += 1
 
-    # Increment frame counter
-    frame_count += 1
-
-    # Exit loop if 'q' key is pressed
+    # Break the loop on 'q' key press
     if key == ord('q'):
         break
 
-# When everything is done, release the capture and close windows
+# Release the capture object and close all OpenCV windows
 cap.release()
 cv2.destroyAllWindows()
