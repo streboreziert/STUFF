@@ -1,29 +1,18 @@
 import cv2
 import numpy as np
 
-# Function to detect lines in a frame using Hough Line Transform
-def detect_lines(frame):
+# Function to detect corners in a frame
+def detect_corners(frame):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-    lines = cv2.HoughLinesP(edges, 1, np.pi / 180, threshold=50, minLineLength=50, maxLineGap=10)
-    return lines
+    corners = cv2.goodFeaturesToTrack(gray, 100, 0.01, 10)
+    corners = np.int0(corners)
+    return corners
 
-# Function to get corner points from the detected lines
-def get_corner_points(lines, frame_shape):
-    corners = []
-
-    # Ensure we have detected some lines
-    if lines is not None:
-        for line in lines:
-            x1, y1, x2, y2 = line[0]
-            if x1 != x2:  # Avoid vertical lines to prevent division by zero
-                slope = (y2 - y1) / (x2 - x1)
-                if -0.5 < slope < 0.5:  # Filter out near-horizontal lines
-                    if x1 < frame_shape[1] / 2 and x2 < frame_shape[1] / 2:
-                        corners.append((x1, y1))
-                    elif x1 > frame_shape[1] / 2 and x2 > frame_shape[1] / 2:
-                        corners.append((x2, y2))
-    
+# Function to refine corners using subpixel accuracy
+def refine_corners(frame, corners):
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.01)
+    corners = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
     return corners
 
 # Capture frames from cameras
@@ -43,17 +32,17 @@ while True:
     # Resize frame2 to match the size of frame1
     frame2 = cv2.resize(frame2, (frame1.shape[1], frame1.shape[0]))
 
-    # Detect lines in both frames
-    lines1 = detect_lines(frame1)
-    lines2 = detect_lines(frame2)
+    # Detect corners in both frames
+    corners1 = detect_corners(frame1)
+    corners2 = detect_corners(frame2)
 
-    # Get corner points from the detected lines
-    corners1 = get_corner_points(lines1, frame1.shape)
-    corners2 = get_corner_points(lines2, frame2.shape)
+    if corners1 is not None and corners2 is not None:
+        # Refine corners using subpixel accuracy
+        corners1_refined = refine_corners(frame1, corners1)
+        corners2_refined = refine_corners(frame2, corners2)
 
-    if corners1 and corners2:
         # Estimate transformation matrix using RANSAC
-        M, _ = cv2.findHomography(np.array(corners2), np.array(corners1), cv2.RANSAC, 5.0)
+        M, _ = cv2.findHomography(corners2_refined, corners1_refined, cv2.RANSAC, 5.0)
 
         # Warp frame2 to align with frame1
         aligned_frame2 = cv2.warpPerspective(frame2, M, (frame1.shape[1], frame1.shape[0]))
