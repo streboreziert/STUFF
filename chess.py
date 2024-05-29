@@ -1,39 +1,63 @@
 import cv2
 import numpy as np
 
-# Read the two images
-image1 = cv2.imread('chessboard1.jpg')
-image2 = cv2.imread('chessboard2.jpg')
+def find_chessboard_corners(image, pattern_size=(9, 6)):
+    """
+    Detect chessboard corners in the image.
+    """
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    ret, corners = cv2.findChessboardCorners(gray, pattern_size, None)
+    return ret, corners
 
-# Convert images to grayscale
-gray1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-gray2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+def align_images(image1, image2, pattern_size=(9, 6)):
+    """
+    Align image2 to image1 using chessboard corners.
+    """
+    # Detect chessboard corners in both images
+    ret1, corners1 = find_chessboard_corners(image1, pattern_size)
+    ret2, corners2 = find_chessboard_corners(image2, pattern_size)
 
-# Set the chessboard size (number of inner corners per chessboard row and column)
-chessboard_size = (7, 7)  # for a 8x8 chessboard, the inner corners are 7x7
-
-# Find the chessboard corners in both images
-ret1, corners1 = cv2.findChessboardCorners(gray1, chessboard_size, None)
-ret2, corners2 = cv2.findChessboardCorners(gray2, chessboard_size, None)
-
-if ret1 and ret2:
-    # Refine the corner positions
-    corners1 = cv2.cornerSubPix(gray1, corners1, (11, 11), (-1, -1), 
-                                criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
-    corners2 = cv2.cornerSubPix(gray2, corners2, (11, 11), (-1, -1), 
-                                criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001))
+    if not ret1 or not ret2:
+        print("Chessboard corners not found in one or both images.")
+        return None
 
     # Find the homography matrix
-    H, status = cv2.findHomography(corners1, corners2, cv2.RANSAC)
+    H, status = cv2.findHomography(corners2, corners1)
 
-    # Warp the first image to align with the second image
-    height, width, channels = image2.shape
-    aligned_image1 = cv2.warpPerspective(image1, H, (width, height))
+    # Warp image2 to the perspective of image1
+    height, width, channels = image1.shape
+    aligned_image2 = cv2.warpPerspective(image2, H, (width, height))
 
-    # Show the aligned image
-    cv2.imshow('Aligned Image 1', aligned_image1)
-    cv2.imshow('Image 2', image2)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-else:
-    print("Chessboard corners not found in one or both images.")
+    return aligned_image2
+
+def blend_images(image1, image2, alpha=0.5):
+    """
+    Blend two images with the given transparency alpha.
+    """
+    blended_image = cv2.addWeighted(image1, alpha, image2, 1 - alpha, 0)
+    return blended_image
+
+def main(image1_path, image2_path, output_path, pattern_size=(9, 6), alpha=0.5):
+    # Read the images
+    image1 = cv2.imread(image1_path)
+    image2 = cv2.imread(image2_path)
+
+    # Align the images
+    aligned_image2 = align_images(image1, image2, pattern_size)
+
+    if aligned_image2 is not None:
+        # Blend the images
+        blended_image = blend_images(image1, aligned_image2, alpha)
+
+        # Save the result
+        cv2.imwrite(output_path, blended_image)
+        print(f"Blended image saved to {output_path}")
+    else:
+        print("Failed to align images.")
+
+# Example usage
+image1_path = 'path_to_image1.jpg'
+image2_path = 'path_to_image2.jpg'
+output_path = 'path_to_output_image.jpg'
+
+main(image1_path, image2_path, output_path)
