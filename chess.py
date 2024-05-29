@@ -1,63 +1,85 @@
 import cv2
 import numpy as np
 
-def find_chessboard_corners(image, pattern_size=(9, 6)):
-    """
-    Detect chessboard corners in the image.
-    """
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    ret, corners = cv2.findChessboardCorners(gray, pattern_size, None)
-    return ret, corners
+# Function to extract chessboard corners from frames
+def extract_chessboard_corners(frames):
+    chessboard_size = (7, 6)  # Size of the chessboard
+    corners_list = []
+    for frame in frames:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        ret, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
+        if ret:
+            corners_list.append(corners)
+    return corners_list
 
-def align_images(image1, image2, pattern_size=(9, 6)):
-    """
-    Align image2 to image1 using chessboard corners.
-    """
-    # Detect chessboard corners in both images
-    ret1, corners1 = find_chessboard_corners(image1, pattern_size)
-    ret2, corners2 = find_chessboard_corners(image2, pattern_size)
+# Function to calculate the transformation matrix
+def calculate_transformation_matrix(corners_list1, corners_list2):
+    object_points = np.zeros((len(corners_list1), 7 * 6, 3), np.float32)
+    object_points[:, :, :2] = np.mgrid[0:7, 0:6].T.reshape(-1, 2)
 
-    if not ret1 or not ret2:
-        print("Chessboard corners not found in one or both images.")
-        return None
+    corners_list1 = np.array(corners_list1)
+    corners_list2 = np.array(corners_list2)
 
-    # Find the homography matrix
-    H, status = cv2.findHomography(corners2, corners1)
+    ret, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+        [object_points], [corners_list1], gray.shape[::-1], None, None
+    )
 
-    # Warp image2 to the perspective of image1
-    height, width, channels = image1.shape
-    aligned_image2 = cv2.warpPerspective(image2, H, (width, height))
+    # Calculate transformation matrix
+    retval, rotation_vector, translation_vector, inliers = cv2.solvePnPRansac(
+        object_points, corners_list2, mtx, dist
+    )
+    rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
+    translation_matrix = np.eye(4)
+    translation_matrix[0:3, 0:3] = rotation_matrix
+    translation_matrix[0:3, 3] = translation_vector[:, 0]
 
-    return aligned_image2
+    return translation_matrix
 
-def blend_images(image1, image2, alpha=0.5):
-    """
-    Blend two images with the given transparency alpha.
-    """
-    blended_image = cv2.addWeighted(image1, alpha, image2, 1 - alpha, 0)
-    return blended_image
+# Function to blend videos
+def blend_videos(video1, video2, transform_matrix):
+    out_width = int(video1.shape[1] * 1.5)
+    out_height = video1.shape[0]
 
-def main(image1_path, image2_path, output_path, pattern_size=(9, 6), alpha=0.5):
-    # Read the images
-    image1 = cv2.imread(image1_path)
-    image2 = cv2.imread(image2_path)
+    # Create a blank canvas to blend videos
+    blended_video = np.zeros((out_height, out_width, 3), dtype=np.uint8)
 
-    # Align the images
-    aligned_image2 = align_images(image1, image2, pattern_size)
+    # Overlay the first video
+    blended_video[:, :video1.shape[1], :] = video1
 
-    if aligned_image2 is not None:
-        # Blend the images
-        blended_image = blend_images(image1, aligned_image2, alpha)
+    # Warp the second video
+    warped_video = cv2.warpPerspective(video2, transform_matrix, (out_width, out_height))
 
-        # Save the result
-        cv2.imwrite(output_path, blended_image)
-        print(f"Blended image saved to {output_path}")
-    else:
-        print("Failed to align images.")
+    # Blend the warped video with the first video
+    blended_video[:, video1.shape[1]:, :] = warped_video
 
-# Example usage
-image1_path = 'path_to_image1.jpg'
-image2_path = 'path_to_image2.jpg'
-output_path = 'path_to_output_image.jpg'
+    return blended_video
 
-main(image1_path, image2_path, output_path)
+# Capture two live video streams
+cap1 = cv2.VideoCapture(0)  # Video stream 1
+cap2 = cv2.VideoCapture(1)  # Video stream 2
+
+# Extract first 100 frames from each video
+frames1 = [cap1.read()[1] for _ in range(100)]
+frames2 = [cap2.read()[1] for _ in range(100)]
+
+# Extract chessboard corners from frames
+corners_list1 = extract_chessboard_corners(frames1)
+corners_list2 = extract_chessboard_corners(frames2)
+
+# Calculate transformation matrix
+transformation_matrix = calculate_transformation_matrix(corners_list1, corners_list2)
+
+# Merge videos
+blended_video = blend_videos(frames1[0], frames2[0], transformation_matrix)
+
+# Display original videos and aligned video
+cv2.imshow('Original Video 1', frames1[0])
+cv2.imshow('Original Video 2', frames2[0])
+cv2.imshow('Aligned Video', blended_video)
+
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+# Release video capture objects
+cap1.release()
+cap2.release()
