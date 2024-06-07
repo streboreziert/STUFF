@@ -59,3 +59,21 @@ else:
             print("Homogeneous Matrix Transformation Coefficients for RGB Image:")
             print(homography_matrix_rgb)
             print("\n")
+
+
+ # Warp the IR image onto the RGB image using the homography matrix
+            warped_ir_image = cv2.warpPerspective(ir_image_resized, homography_matrix_ir, (rgb_image.shape[1], rgb_image.shape[0]))
+
+            # Make the IR image slightly transparent and overlay it on the RGB image
+            alpha = 0.5  # Adjust transparency level (0.0 to 1.0)
+            rgb_image_float = rgb_image.astype(float)
+            warped_ir_image_color = cv2.cvtColor(warped_ir_image, cv2.COLOR_GRAY2BGR).astype(float)
+            blended_image = cv2.addWeighted(rgb_image_float, alpha, warped_ir_image_color, 1 - alpha, 0)
+
+            # Convert the blended image back to uint8 (required by imshow)
+            blended_image = blended_image.astype(np.uint8)
+
+            # Display the blended image
+            cv2.imshow("Blended Image", blended_image)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
