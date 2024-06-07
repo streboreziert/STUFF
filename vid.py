@@ -2,21 +2,12 @@ import cv2
 import numpy as np
 
 # Function to detect chessboard corners and calculate homography matrix
-def detect_chessboard_and_homography(image_path):
-    # Read the image
-    image = cv2.imread(image_path)
-    if image is None:
-        print("Error: Could not open or find the image.")
-        return None, None
-    
-    # Convert the image to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
+def detect_chessboard_and_homography(gray_image):
     # Define the size of the chessboard
     chessboard_size = (7, 7)  # Change according to your chessboard
     
     # Find chessboard corners
-    ret, corners = cv2.findChessboardCorners(gray, chessboard_size, None)
+    ret, corners = cv2.findChessboardCorners(gray_image, chessboard_size, None)
     
     if ret:
         # Calculate homography matrix
@@ -32,30 +23,39 @@ def detect_chessboard_and_homography(image_path):
 
         homography_matrix, _ = cv2.findHomography(pts_src, pts_dst)
         
-        return homography_matrix, image
+        return homography_matrix
     else:
         print("Chessboard corners not found in the image.")
-        return None, None
+        return None
 
-# Paths to the two images (IR camera and RGB camera photos with chessboards)
+# Paths to the IR image and RGB image with chessboards
 ir_image_path = 'ir_image.jpg'
 rgb_image_path = 'rgb_image.jpg'
 
-# Detect chessboard corners and calculate homography matrix for the IR camera photo
-homography_matrix_ir, ir_image = detect_chessboard_and_homography(ir_image_path)
+# Read the IR image
+ir_image = cv2.imread(ir_image_path, cv2.IMREAD_GRAYSCALE)
+if ir_image is None:
+    print("Error: Could not open or find the IR image.")
+else:
+    # Detect chessboard corners and calculate homography matrix for the IR image
+    homography_matrix_ir = detect_chessboard_and_homography(ir_image)
 
-# Detect chessboard corners and calculate homography matrix for the RGB camera photo
-homography_matrix_rgb, rgb_image = detect_chessboard_and_homography(rgb_image_path)
+    # Read the RGB image
+    rgb_image = cv2.imread(rgb_image_path)
+    if rgb_image is None:
+        print("Error: Could not open or find the RGB image.")
+    else:
+        # Detect chessboard corners and calculate homography matrix for the RGB image
+        homography_matrix_rgb = detect_chessboard_and_homography(rgb_image)
 
-# Check if both homography matrices are found
-if homography_matrix_ir is not None and homography_matrix_rgb is not None:
-    # Print coefficients of the homography matrix for the IR camera photo
-    print("Homogeneous Matrix Transformation Coefficients for IR Camera Photo:")
-    print(homography_matrix_ir)
-    print("\n")
+        # Check if both homography matrices are found
+        if homography_matrix_ir is not None and homography_matrix_rgb is not None:
+            # Print coefficients of the homography matrix for the IR image
+            print("Homogeneous Matrix Transformation Coefficients for IR Image:")
+            print(homography_matrix_ir)
+            print("\n")
 
-    # Print coefficients of the homography matrix for the RGB camera photo
-    print("Homogeneous Matrix Transformation Coefficients for RGB Camera Photo:")
-    print(homography_matrix_rgb)
-    print("\n")
-
+            # Print coefficients of the homography matrix for the RGB image
+            print("Homogeneous Matrix Transformation Coefficients for RGB Image:")
+            print(homography_matrix_rgb)
+            print("\n")
